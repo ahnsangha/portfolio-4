@@ -124,3 +124,61 @@ button[type="submit"]:hover {
   flex: 3; /* 60% -> flex 3 */
   min-width: 400px;
 }
+/* ... (기존 CSS 스타일) ... */
+
+/* === (새로 추가) Modal 스타일 === */
+.ReactModal__Overlay {
+  opacity: 0;
+  transition: opacity 200ms ease-in-out;
+  background-color: rgba(0, 0, 0, 0.75);
+  z-index: 1000;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.ReactModal__Overlay--after-open{
+  opacity: 1;
+}
+
+.ReactModal__Overlay--before-close{
+  opacity: 0;
+}
+
+.ModalContent {
+  background: #fff;
+  padding: 2rem;
+  border-radius: 12px;
+  width: 90%;
+  max-width: 500px;
+  outline: none;
+  box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+}
+
+.ModalContent h2 {
+  margin-top: 0;
+}
+
+.ModalContent .form-group {
+  margin-bottom: 1rem;
+}
+
+.ModalContent .modal-actions {
+  margin-top: 1.5rem;
+  text-align: right;
+  display: flex;
+  gap: 0.5rem;
+  justify-content: flex-end;
+}
+
+.ModalContent .modal-actions button {
+  padding: 0.5em 1em;
+}
+
+.ModalContent .modal-actions .btn-secondary {
+  background-color: #f0f0f0;
+  border: 1px solid #ccc;
+}
+.ModalContent .modal-actions .btn-secondary:hover {
+  background-color: #e0e0e0;
+}

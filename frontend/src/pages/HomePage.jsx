@@ -1,47 +1,42 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import '../App.css'
-// 1. axios는 삭제하고, useAuth 훅을 임포트합니다.
 import { useAuth } from '../context/AuthContext'
-
-// 2. API_URL과 api 인스턴스를 모두 삭제합니다. (AuthContext가 관리)
+import Modal from 'react-modal'; // 1. react-modal 임포트
 
 export default function HomePage() {
-  // 3. AuthContext에서 전역 상태와 함수를 가져옵니다.
   const { token, userData, api, login, logout, isLoading } = useAuth();
 
-  // 4. 인증 관련 로컬 상태(token, userData)는 제거하고,
-  //    로그인 폼 전용 상태만 남깁니다.
+  // (로그인 폼 상태)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
 
-  // 5. 이 페이지에서 관리할 데이터 상태 (이전과 동일)
+  // (여행 목록 및 새 폼 상태)
   const [trips, setTrips] = useState([])
   const [newTripTitle, setNewTripTitle] = useState('')
   const [newTripStartDate, setNewTripStartDate] = useState('')
   const [newTripEndDate, setNewTripEndDate] = useState('')
-  const [editingTripId, setEditingTripId] = useState(null);
-  const [editingTripTitle, setEditingTripTitle] = useState("");
+  
+  // 2. (수정) 인라인 수정 상태 -> 모달 수정 상태로 변경
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [currentTripToEdit, setCurrentTripToEdit] = useState(null); // 수정할 trip 객체
+  const [modalEditTitle, setModalEditTitle] = useState(""); // 모달 안의 input 값
 
-  // 6. (수정) 전역 userData가 변경될 때, 이 페이지의 로컬 trips 상태를 동기화합니다.
+  // (useEffect, handleLogin은 이전과 동일)
   useEffect(() => {
     if (userData) {
-      // AuthContext가 불러온 내 정보(userData)에서 여행 목록을 가져옵니다.
       setTrips(userData.trips || []);
     } else {
-      setTrips([]); // 로그아웃 시 목록 비우기
+      setTrips([]);
     }
-  }, [userData]); // userData(from Context)가 바뀔 때마다 실행
+  }, [userData]); 
 
-  // 7. (수정) handleLogin 함수가 매우 간단해집니다.
   const handleLogin = async (e) => {
     e.preventDefault()
     setError('')
     try {
-      // AuthContext의 login 함수를 호출합니다.
       await login(email, password);
-      // 성공 시 setToken은 AuthContext가 알아서 처리합니다.
     } catch (err) {
       setError(err.response?.data?.detail || '로그인 실패');
     }
@@ -84,20 +79,6 @@ export default function HomePage() {
     }
   }
 
-  const handleUpdateTripTitle = async (tripId) => {
-    if (!editingTripTitle) { setError("여행 제목을 입력해주세요."); return; }
-    setError('');
-    try {
-      await api.put(`/api/trips/${tripId}`, { title: editingTripTitle });
-      setEditingTripId(null);
-      setEditingTripTitle("");
-      fetchMyTrips();
-    } catch (err) {
-      setError("여행 제목 수정에 실패했습니다.");
-      if (err.response && err.response.status === 401) logout();
-    }
-  }
-
   const handleDeleteTrip = async (tripId) => {
     if (!window.confirm("정말로 이 여행을 삭제하시겠습니까?")) return;
     setError('');
@@ -106,6 +87,49 @@ export default function HomePage() {
       fetchMyTrips(); 
     } catch (err) {
       setError("여행 삭제에 실패했습니다.");
+      if (err.response && err.response.status === 401) logout();
+    }
+  }
+
+  // 3. (추가) 모달 열기/닫기 헬퍼 함수
+  const openEditModal = (trip) => {
+    setCurrentTripToEdit(trip);      // 현재 수정할 trip 정보를 상태에 저장
+    setModalEditTitle(trip.title);  // 모달 input의 초기값을 현재 제목으로 설정
+    setIsEditModalOpen(true);       // 모달 열기
+    setError('');                   // 이전 에러 메시지 초기화
+  }
+
+  const closeEditModal = () => {
+    setIsEditModalOpen(false);
+    setCurrentTripToEdit(null);
+    setModalEditTitle("");
+  }
+
+  // 4. (수정) 여행(Trip) 제목 수정 핸들러 -> 모달 폼 제출용으로 변경
+  const handleUpdateTripTitle = async (e) => {
+    e.preventDefault(); // 폼 제출
+    
+    if (!modalEditTitle) {
+      setError("여행 제목을 입력해주세요.");
+      return;
+    }
+    if (!currentTripToEdit) return; // 방어 코드
+
+    setError('');
+
+    try {
+      // PUT /api/trips/{trip_id} 호출
+      await api.put(`/api/trips/${currentTripToEdit.id}`, {
+        title: modalEditTitle // 모달 input의 값 사용
+      });
+
+      // 성공 시: 모달 닫기 및 목록 새로고침
+      closeEditModal();
+      fetchMyTrips();
+
+    } catch (err) {
+      console.error("여행 제목 수정 오류:", err);
+      setError("여행 제목 수정에 실패했습니다.");
       if (err.response && err.response.status === 401) logout();
     }
   }
@@ -180,33 +204,28 @@ export default function HomePage() {
               {trips.length > 0 ? (
                 trips.map((trip) => (
                   <li key={trip.id}>
-                    {/* (목록 내부는 CSS 적용한 이전 코드와 동일) */}
-                    {editingTripId === trip.id ? (
-                      <>
-                        <input
-                          type="text"
-                          value={editingTripTitle}
-                          onChange={(e) => setEditingTripTitle(e.target.value)}
-                        />
-                        <button onClick={() => handleUpdateTripTitle(trip.id)} style={{ marginLeft: '5px' }}>저장</button>
-                        <button onClick={() => setEditingTripId(null)} style={{ marginLeft: '5px' }}>취소</button>
-                      </>
-                    ) : (
-                      <>
-                        <div className="trip-info">
-                          <Link to={`/trip/${trip.id}`}>{trip.title}</Link>
-                          <p>{trip.start_date || 'N/A'} ~ {trip.end_date || 'N/A'}</p>
-                        </div>
-                        <div className="trip-actions">
-                          <button onClick={() => { setEditingTripId(trip.id); setEditingTripTitle(trip.title); }}>
-                            수정
-                          </button>
-                          <button onClick={() => handleDeleteTrip(trip.id)} style={{ borderColor: 'red', color: 'red' }}>
-                            삭제
-                          </button>
-                        </div>
-                      </>
-                    )}
+                    {/* (수정) 인라인 편집 로직(ternary) 제거 */}
+                    <div className="trip-info">
+                      <Link to={`/trip/${trip.id}`}>{trip.title}</Link>
+                      <p>
+                        {trip.start_date || 'N/A'} ~ {trip.end_date || 'N/A'}
+                      </p>
+                    </div>
+                    
+                    <div className="trip-actions">
+                      {/* (수정) 수정 버튼 onClick이 모달을 열도록 변경 */}
+                      <button 
+                        onClick={() => openEditModal(trip)}
+                      >
+                        수정
+                      </button>
+                      <button 
+                        onClick={() => handleDeleteTrip(trip.id)}
+                        style={{ borderColor: 'red', color: 'red' }}
+                      >
+                        삭제
+                      </button>
+                    </div>
                   </li>
                 ))
               ) : (
@@ -216,6 +235,42 @@ export default function HomePage() {
           </div>
         </>
       )}
+
+      {/* --- (새로 추가) 여행 제목 수정 모달 --- */}
+      <Modal
+        isOpen={isEditModalOpen}
+        onRequestClose={closeEditModal}
+        className="ModalContent"        // App.css에 정의한 클래스
+        overlayClassName="ReactModal__Overlay" // App.css에 정의한 클래스
+        contentLabel="여행 제목 수정"
+      >
+        <h2>여행 제목 수정</h2>
+        <form onSubmit={handleUpdateTripTitle}>
+          <div className="form-group">
+            <label>새 여행 제목:</label>
+            <input
+              type="text"
+              value={modalEditTitle}
+              onChange={(e) => setModalEditTitle(e.target.value)}
+              autoFocus
+            />
+          </div>
+          
+          {/* 모달 내 에러 메시지 */}
+          {error && <p style={{ color: 'red' }}>{error}</p>}
+
+          <div className="modal-actions">
+            <button 
+              type="button" 
+              className="btn-secondary" 
+              onClick={closeEditModal}
+            >
+              취소
+            </button>
+            <button type="submit">저장</button>
+          </div>
+        </form>
+      </Modal>
     </>
   )
 }

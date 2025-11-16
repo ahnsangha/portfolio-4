@@ -3,11 +3,15 @@ import { createRoot } from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
 import './index.css'
 import App from './App.jsx'
-import { AuthProvider } from './context/AuthContext' // 1. 임포트
+import { AuthProvider } from './context/AuthContext'
+import Modal from 'react-modal';
+
+// 모달이 #root 엘리먼트를 앱의 루트로 인식하도록 설정
+Modal.setAppElement('#root');
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
-    <AuthProvider> {/* 2. 앱 전체를 감싸기 */}
+    <AuthProvider> {/* 앱 전체를 감싸기 */}
       <BrowserRouter>
         <App />
       </BrowserRouter>
