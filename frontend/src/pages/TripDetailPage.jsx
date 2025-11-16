@@ -6,18 +6,12 @@ import { GoogleMap, useJsApiLoader, Marker, Autocomplete, Polyline } from '@reac
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import Modal from 'react-modal'; 
 
-// (지도 스타일, 기본 위치 설정은 동일)
+// --- (1) 컴포넌트 바깥에는 '고정된 값'만 둡니다 ---
 const mapContainerStyle = { width: '100%', height: '400px' };
 const defaultCenter = { lat: 37.5665, lng: 126.9780 };
-
-// Google Maps API 로더가 'places' 라이브러리도 불러오도록 설정
 const libraries = ['places'];
 
-const polylineOptions = {
-  strokeColor: '#FF0000', // 선 색상
-  strokeOpacity: 0.8,     // 선 불투명도
-  strokeWeight: 3,        // 선 굵기
-};
+// (중요) 여기에 있던 polylineOptions는 삭제하고 컴포넌트 안으로 이동했습니다.
 
 export default function TripDetailPage() {
   // 1. 전역 상태 및 훅
@@ -35,32 +29,71 @@ export default function TripDetailPage() {
   const [searchMemo, setSearchMemo] = useState("");
   const [selectedDay, setSelectedDay] = useState(1);
   const [itemsForSelectedDay, setItemsForSelectedDay] = useState([]);
-  const [selectedPlace, setSelectedPlace] = useState(null); // Autocomplete에서 선택된 장소
-  const autocompleteInputRef = useRef(null); // Autocomplete 입력창 DOM
+  const [selectedPlace, setSelectedPlace] = useState(null); 
+  const autocompleteInputRef = useRef(null); 
 
-  // 3. 메모 수정 모달 상태
+  // 3. '일정' 수정 모달 상태
   const [isMemoModalOpen, setIsMemoModalOpen] = useState(false);
   const [currentItemToEdit, setCurrentItemToEdit] = useState(null); 
   const [modalEditMemo, setModalEditMemo] = useState(""); 
+  const [modalEditDay, setModalEditDay] = useState(1); 
 
-  // 4. Google Maps 스크립트 로드
+  // 4. 여행 '정보' 수정 모달 상태
+  const [isTripEditModalOpen, setIsTripEditModalOpen] = useState(false);
+  const [modalEditTitle, setModalEditTitle] = useState("");
+  const [modalEditStartDate, setModalEditStartDate] = useState("");
+  const [modalEditEndDate, setModalEditEndDate] = useState("");
+
+  // 5. 지도-목록 연동 하이라이트 상태
+  const [highlightedItemId, setHighlightedItemId] = useState(null);
+
+  // 6. Google Maps 스크립트 로드
   const { isLoaded } = useJsApiLoader({
     id: 'google-map-script',
     googleMapsApiKey: import.meta.env.VITE_GOOGLE_MAPS_API_KEY,
     libraries: libraries
   })
+
+  // --- (2) useMemo를 사용하는 polylineOptions는 반드시 컴포넌트 '안'에 있어야 합니다 ---
+  const polylineOptions = useMemo(() => {
+    // 지도가 아직 로딩되지 않았으면 기본 옵션만 반환 (오류 방지)
+    if (!isLoaded || !window.google) {
+      return {
+        strokeColor: '#FF0000',
+        strokeOpacity: 0.8,
+        strokeWeight: 5,
+      };
+    }
+
+    // 지도가 로딩되면 화살표(Symbol)가 포함된 옵션 반환
+    return {
+      strokeColor: '#FF0000',
+      strokeOpacity: 0.8,
+      strokeWeight: 5, // 선 굵기
+      icons: [
+        {
+          // 구글 지도 기본 화살표 심볼 사용
+          icon: {
+            path: window.google.maps.SymbolPath.FORWARD_CLOSED_ARROW,
+            strokeColor: '#FF0000', // 화살표 색상
+            strokeOpacity: 1,
+            scale: 3, // 화살표 크기
+          },
+          offset: '0',      // 시작점부터
+          repeat: '100px',  // 100px 간격으로 화살표 반복 (너무 촘촘하면 지저분해 보임)
+        },
+      ],
+    };
+  }, [isLoaded]);
   
-  // 5. API 호출 함수: 여행 상세 정보 불러오기
+  // 7. API 호출 함수: fetchTripDetails
   const fetchTripDetails = () => {
-    // AuthContext의 'api' 인스턴스는 이미 토큰을 가지고 있음
     setLoading(true);
     api.get(`/api/trips/${tripId}`)
       .then(response => {
         setTrip(response.data)
         setLoading(false)
-        setError('') // 성공 시 에러 초기화
-        
-        // 지도 중심 설정 (마지막 항목 기준)
+        setError('') 
         if (response.data.items.length > 0) {
           const lastItem = response.data.items[response.data.items.length - 1];
           if (lastItem.latitude && lastItem.longitude) {
@@ -74,12 +107,12 @@ export default function TripDetailPage() {
         setLoading(false)
         if (err.response && err.response.status === 401) {
           logout();
-          navigate('/'); // 토큰 만료 시 홈으로
+          navigate('/'); 
         }
       })
   }
 
-  // 6. 페이지 로드 시 (또는 tripId/token 변경 시) 데이터 호출
+  // 8. 페이지 로드 시 데이터 호출
   useEffect(() => {
     if (token) {
       fetchTripDetails()
@@ -89,23 +122,21 @@ export default function TripDetailPage() {
     }
   }, [tripId, token])
 
-  // 7. Autocomplete 핸들러
+  // 9. Autocomplete 핸들러
   const onLoad = (autocompleteInstance) => setAutocomplete(autocompleteInstance);
-  
   const onPlaceChanged = () => {
     if (autocomplete !== null) {
       const place = autocomplete.getPlace();
-      setSelectedPlace(place); // 선택된 장소를 state에 저장
+      setSelectedPlace(place); 
     } else {
       console.log('Autocomplete is not loaded yet!');
     }
   }
 
-  // 8. "일정 추가" 핸들러
+  // 10. "일정 추가" 핸들러
   const handleAddPlace = async (e) => {
     e.preventDefault(); 
-    
-    const place = selectedPlace; // state에서 가져옴
+    const place = selectedPlace; 
     
     if (!place || !place.geometry || !place.geometry.location) {
       setError('Google Maps에서 장소를 선택해주세요.');
@@ -124,27 +155,25 @@ export default function TripDetailPage() {
     
     setError('');
     try {
-      await api.post(`/api/trips/${tripId}/items`, newItemData);
-      
-      // 폼 초기화
+      const response = await api.post(`/api/trips/${tripId}/items`, newItemData);
       setSearchMemo("");
       setSelectedPlace(null);
       if (autocompleteInputRef.current) {
         autocompleteInputRef.current.value = "";
       }
-      
-      fetchTripDetails(); // 목록 새로고침
-      
+      fetchTripDetails(); 
+      setHighlightedItemId(response.data.id); 
     } catch (err) {
       setError("일정 추가에 실패했습니다.");
       if (err.response && err.response.status === 401) logout();
     }
   }
 
-  // 9. 메모 수정 모달 열기/닫기
+  // 11. '일정' 수정 모달 열기/닫기
   const openMemoModal = (item) => {
     setCurrentItemToEdit(item);
     setModalEditMemo(item.memo || "");
+    setModalEditDay(item.day); 
     setIsMemoModalOpen(true);
     setError(''); 
   }
@@ -153,27 +182,29 @@ export default function TripDetailPage() {
     setIsMemoModalOpen(false);
     setCurrentItemToEdit(null);
     setModalEditMemo("");
+    setModalEditDay(1); 
   }
 
-  // 10. "메모 수정" 핸들러 (모달 제출)
-  const handleUpdateItemMemo = async (e) => {
+  // 12. "일정 수정" 핸들러
+  const handleUpdateItem = async (e) => { 
     e.preventDefault();
     if (!currentItemToEdit) return;
     setError('');
 
     try {
       await api.put(`/api/items/${currentItemToEdit.id}`, {
-        memo: modalEditMemo 
+        memo: modalEditMemo,
+        day: modalEditDay 
       });
       closeMemoModal();
       fetchTripDetails(); 
     } catch (err) {
-      setError("메모 수정에 실패했습니다.");
+      setError("일정 수정에 실패했습니다."); 
       if (err.response && err.response.status === 401) logout();
     }
   }
 
-  // 11. "일정 삭제" 핸들러
+  // 13. "일정 삭제" 핸들러
   const handleDeleteItem = async (itemId) => {
     if (!window.confirm("이 일정을 삭제하시겠습니까?")) return;
     setError('');
@@ -186,15 +217,71 @@ export default function TripDetailPage() {
     }
   }
   
-  // 12. 여행 일차(Day) 목록 계산
+  // 14. 여행 '정보' 수정 모달 열기/닫기
+  const openTripEditModal = () => {
+    if (!trip) return;
+    setModalEditTitle(trip.title);
+    setModalEditStartDate(trip.start_date || '');
+    setModalEditEndDate(trip.end_date || '');
+    setIsTripEditModalOpen(true);
+    setError(''); 
+  }
+
+  const closeTripEditModal = () => {
+    setIsTripEditModalOpen(false);
+    setModalEditTitle("");
+    setModalEditStartDate("");
+    setModalEditEndDate("");
+  }
+
+  // 15. 여행 '정보' 수정 핸들러
+  const handleUpdateTripDetails = async (e) => {
+    e.preventDefault();
+    if (!modalEditTitle) {
+      setError("여행 제목을 입력해주세요.");
+      return;
+    }
+    
+    setError('');
+    try {
+      await api.put(`/api/trips/${tripId}`, {
+        title: modalEditTitle,
+        start_date: modalEditStartDate || null,
+        end_date: modalEditEndDate || null
+      });
+      closeTripEditModal();
+      fetchTripDetails(); 
+    } catch (err) {
+      setError("여행 정보 수정에 실패했습니다.");
+      if (err.response && err.response.status === 401) logout();
+    }
+  }
+
+  // 16. 여행 '자체' 삭제 핸들러
+  const handleDeleteTrip = async () => {
+    if (!window.confirm("정말로 이 여행 전체를 삭제하시겠습니까?\n모든 세부 일정이 함께 삭제됩니다.")) return;
+    
+    setError('');
+    try {
+      await api.delete(`/api/trips/${tripId}`);
+      alert("여행이 삭제되었습니다.");
+      navigate('/'); 
+    } catch (err) {
+      setError("여행 삭제에 실패했습니다.");
+      if (err.response && err.response.status === 401) logout();
+    }
+  }
+
+  // 17. 여행 일차(Day) 목록 계산
   const tripDays = useMemo(() => {
     if (!trip) return [1];
     const days = new Set(trip.items.map(item => item.day));
+    days.add(selectedDay); 
     if (days.size === 0) return [1];
     return Array.from(days).sort((a, b) => a - b);
-  }, [trip]);
+  }, [trip, selectedDay]); 
 
-  // 13. 선택된 날짜의 일정 목록 상태 업데이트
+  // 18. 선택된 날짜의 일정 목록 상태 업데이트
   useEffect(() => {
     if (!trip) {
       setItemsForSelectedDay([]);
@@ -206,38 +293,34 @@ export default function TripDetailPage() {
     setItemsForSelectedDay(filteredAndSortedItems);
   }, [trip, selectedDay]);
 
-  // 14. Polyline 경로 계산
+  // 19. Polyline 경로 계산
   const polylinePath = useMemo(() => {
     return itemsForSelectedDay
       .filter(item => item.latitude && item.longitude)
       .map(item => ({ lat: item.latitude, lng: item.longitude }));
   }, [itemsForSelectedDay]);
 
-  // 15. D&D 드래그 종료 핸들러
+  // 20. D&D 드래그 종료 핸들러
   const onDragEnd = (result) => {
     const { destination, source } = result;
     if (!destination || (destination.droppableId === source.droppableId && destination.index === source.index)) {
       return;
     }
-
     const newItems = Array.from(itemsForSelectedDay);
     const [reorderedItem] = newItems.splice(source.index, 1);
     newItems.splice(destination.index, 0, reorderedItem);
-    
     const updateData = newItems.map((item, index) => ({
       id: item.id,
       order_sequence: index + 1
     }));
-    
-    setItemsForSelectedDay(newItems); // 낙관적 업데이트
-
+    setItemsForSelectedDay(newItems); 
     api.post('/api/items/reorder', updateData)
       .then(response => {
         console.log('순서 변경 완료', response.data);
       })
       .catch(err => {
         setError("순서 변경에 실패했습니다. 페이지를 새로고침합니다.");
-        fetchTripDetails(); // 실패 시 롤백
+        fetchTripDetails(); 
         if (err.response && err.response.status === 401) logout();
       });
   };
@@ -253,7 +336,6 @@ export default function TripDetailPage() {
   )
   if (loading) return <p>여행 정보 로딩 중...</p>
   
-  // (수정) !trip일 때만 error를 페이지 상단에 표시
   if (!trip) {
      return <p style={{ color: 'red' }}>{error || "여행 정보를 찾을 수 없습니다."}</p>
   }
@@ -264,10 +346,21 @@ export default function TripDetailPage() {
       <p><Link to="/">&larr; 내 여행 목록으로 돌아가기</Link></p>
       <h2>{trip.title}</h2>
       <p style={{ color: '#555', marginTop: '-10px' }}>
-        ({trip.start_date} ~ {trip.end_date})
+        ({trip.start_date || 'N/A'} ~ {trip.end_date || 'N/A'})
       </p>
 
-      {/* --- 장소 추가 폼 --- */}
+      <div className="trip-actions" style={{ marginBottom: '1rem', paddingBottom: '1rem', borderBottom: '1px solid #eee' }}>
+        <button onClick={openTripEditModal}>
+          여행 정보 수정 (제목/날짜)
+        </button>
+        <button 
+          onClick={handleDeleteTrip}
+          style={{ borderColor: 'red', color: 'red', marginLeft: '0.5rem' }}
+        >
+          여행 전체 삭제
+        </button>
+      </div>
+
       <div className="card">
         <h3>새 일정 추가</h3>
         <form onSubmit={handleAddPlace}>
@@ -285,7 +378,6 @@ export default function TripDetailPage() {
               />
             </Autocomplete>
           </div>
-          
           <div style={{ display: 'flex', gap: '1rem' }}>
             <div className="form-group" style={{ flex: 1 }}>
               <label>Day:</label>
@@ -310,12 +402,9 @@ export default function TripDetailPage() {
           </div>
           <button type="submit">일정 추가</button>
         </form>
-        
-        {/* 오류 메시지를 폼 내부에 표시 */}
-        {error && !isMemoModalOpen && <p style={{ color: 'red', marginTop: '10px' }}>{error}</p>}
+        {error && !isMemoModalOpen && !isTripEditModalOpen && <p style={{ color: 'red', marginTop: '10px' }}>{error}</p>}
       </div>
 
-      {/* --- 날짜 선택 버튼 --- */}
       <div className="card">
         <strong>날짜 선택: </strong>
         {tripDays.map(day => (
@@ -357,11 +446,20 @@ export default function TripDetailPage() {
                               ref={provided.innerRef}
                               {...provided.draggableProps}
                               {...provided.dragHandleProps}
-                              className="dnd-item"
+                              className={
+                                item.id === highlightedItemId 
+                                ? "dnd-item dnd-item-highlighted" 
+                                : "dnd-item"
+                              }
                               style={{ ...provided.draggableProps.style }}
                             >
                               <div 
-                                onClick={() => item.latitude && setMapCenter({ lat: item.latitude, lng: item.longitude })}
+                                onClick={() => {
+                                  if (item.latitude) {
+                                    setMapCenter({ lat: item.latitude, lng: item.longitude });
+                                  }
+                                  setHighlightedItemId(item.id);
+                                }}
                                 style={{ cursor: 'pointer' }}
                               >
                                 <strong>{item.place_name}</strong>
@@ -371,9 +469,9 @@ export default function TripDetailPage() {
                                 <button
                                   onClick={() => openMemoModal(item)}
                                   className="memo-edit-btn"
-                                  title="메모 수정"
+                                  title="일정 수정"
                                 >
-                                  [메모 수정]
+                                  [일정 수정]
                                 </button>
                                 <button 
                                   onClick={() => handleDeleteItem(item.id)}
@@ -405,6 +503,7 @@ export default function TripDetailPage() {
               mapContainerStyle={mapContainerStyle}
               center={mapCenter}
               zoom={12}
+              onClick={() => setHighlightedItemId(null)} 
             >
               {itemsForSelectedDay.map(item => (
                 item.latitude && item.longitude && (
@@ -412,28 +511,43 @@ export default function TripDetailPage() {
                     key={item.id}
                     position={{ lat: item.latitude, lng: item.longitude }}
                     title={item.place_name}
+                    onClick={() => setHighlightedItemId(item.id)}
                   />
                 )
               ))}
-              <Polyline
-                path={polylinePath}
-                options={polylineOptions}
-              />
+              
+              {/* 라이브러리가 path 변경을 감지하여 자동으로 선을 다시 그립니다. */}
+                <Polyline
+                  path={polylinePath}
+                  options={polylineOptions}
+                />
+
             </GoogleMap>
           </div>
         </div>
       </div>
 
-      {/* --- 세부 일정 메모 수정 모달 --- */}
+      {/* --- 세부 일정 수정 모달 --- */}
       <Modal
         isOpen={isMemoModalOpen}
         onRequestClose={closeMemoModal}
         className="ModalContent"
         overlayClassName="ReactModal__Overlay"
-        contentLabel="세부 일정 메모 수정"
+        contentLabel="세부 일정 수정"
       >
-        <h2>메모 수정</h2>
-        <form onSubmit={handleUpdateItemMemo}>
+        <h2>세부 일정 수정</h2> 
+        <form onSubmit={handleUpdateItem}> 
+          <div className="form-group">
+            <label>Day:</label>
+            <input
+              type="number"
+              value={modalEditDay}
+              onChange={(e) => setModalEditDay(parseInt(e.target.value) || 1)}
+              min="1"
+              style={{ width: '100px' }}
+              autoFocus
+            />
+          </div>
           <div className="form-group">
             <label>메모 (비워도 됩니다):</label>
             <input
@@ -441,13 +555,9 @@ export default function TripDetailPage() {
               value={modalEditMemo}
               onChange={(e) => setModalEditMemo(e.target.value)}
               placeholder="간단한 메모 입력..."
-              autoFocus
             />
           </div>
-          
-          {/* 모달 내 에러 메시지 */}
           {error && isMemoModalOpen && <p style={{ color: 'red' }}>{error}</p>}
-
           <div className="modal-actions">
             <button 
               type="button" 
@@ -460,6 +570,56 @@ export default function TripDetailPage() {
           </div>
         </form>
       </Modal>
+
+      {/* --- 여행 정보 수정 모달 --- */}
+      <Modal
+        isOpen={isTripEditModalOpen}
+        onRequestClose={closeTripEditModal}
+        className="ModalContent"
+        overlayClassName="ReactModal__Overlay"
+        contentLabel="여행 정보 수정"
+      >
+        <h2>여행 정보 수정</h2>
+        <form onSubmit={handleUpdateTripDetails}>
+          <div className="form-group">
+            <label>여행 제목:</label>
+            <input
+              type="text"
+              value={modalEditTitle}
+              onChange={(e) => setModalEditTitle(e.target.value)}
+              autoFocus
+            />
+          </div>
+          <div className="form-group">
+            <label>시작일:</label>
+            <input
+              type="date"
+              value={modalEditStartDate}
+              onChange={(e) => setModalEditStartDate(e.target.value)}
+            />
+          </div>
+          <div className="form-group">
+            <label>종료일:</label>
+            <input
+              type="date"
+              value={modalEditEndDate}
+              onChange={(e) => setModalEditEndDate(e.target.value)}
+            />
+          </div>
+          {error && isTripEditModalOpen && <p style={{ color: 'red' }}>{error}</p>}
+          <div className="modal-actions">
+            <button 
+              type="button" 
+              className="btn-secondary" 
+              onClick={closeTripEditModal}
+            >
+              취소
+            </button>
+            <button type="submit">저장</button>
+          </div>
+        </form>
+      </Modal>
+
     </div>
   )
 }

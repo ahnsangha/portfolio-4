@@ -85,6 +85,10 @@ button[type="submit"]:hover {
   border-radius: 6px;
   box-shadow: 0 1px 3px rgba(0,0,0,0.05);
 }
+.dnd-item-highlighted {
+  background-color: #f0f2ff; /* 하이라이트 배경색 */
+  box-shadow: 0 2px 4px rgba(100, 108, 255, 0.2);
+}
 .dnd-item p {
   font-size: 0.9em;
   margin: 2px 0 0 0;
@@ -124,7 +128,6 @@ button[type="submit"]:hover {
   flex: 3; /* 60% -> flex 3 */
   min-width: 400px;
 }
-/* ... (기존 CSS 스타일) ... */
 
 /* === (새로 추가) Modal 스타일 === */
 .ReactModal__Overlay {
