@@ -1,0 +1,14 @@
+# Python (Backend)
+/backend/venv/
+__pycache__/
+.pyc
+*.py[cod]
+
+# Node (Frontend)
+/frontend/node_modules/
+/frontend/dist/
+/frontend/.vite/
+.DS_Store
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
