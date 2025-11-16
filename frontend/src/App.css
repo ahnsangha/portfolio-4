@@ -1,6 +1,4 @@
 /* frontend/src/App.css */
-
-/* (수정) #root -> .App (App.jsx의 className="App") */
 /* 앱 전체를 감싸는 컨테이너 */
 .App {
   max-width: 1280px;
@@ -184,4 +182,24 @@ button[type="submit"]:hover {
 }
 .ModalContent .modal-actions .btn-secondary:hover {
   background-color: #e0e0e0;
+}
+.ReactModal__Overlay {
+  position: fixed;   /* 화면에 고정 */
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+
+  opacity: 0;
+  transition: opacity 200ms ease-in-out;
+  background-color: rgba(0, 0, 0, 0.75);
+  z-index: 1000;
+  
+  display: flex;             /* 플렉스 박스 사용 */
+  justify-content: center;   /* 가로 중앙 정렬 */
+  align-items: center;       /* 세로 중앙 정렬 */
+}
+
+.ReactModal__Overlay--after-open{
+  opacity: 1;
 }
