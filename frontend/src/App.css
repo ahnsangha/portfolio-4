@@ -1,42 +1,126 @@
-#root {
+/* frontend/src/App.css */
+
+/* (수정) #root -> .App (App.jsx의 className="App") */
+/* 앱 전체를 감싸는 컨테이너 */
+.App {
   max-width: 1280px;
   margin: 0 auto;
   padding: 2rem;
-  text-align: center;
+  text-align: left; /* 기본 정렬을 왼쪽으로 변경 */
 }
 
-.logo {
-  height: 6em;
-  padding: 1.5em;
-  will-change: filter;
-  transition: filter 300ms;
-}
-.logo:hover {
-  filter: drop-shadow(0 0 2em #646cffaa);
-}
-.logo.react:hover {
-  filter: drop-shadow(0 0 2em #61dafbaa);
-}
-
-@keyframes logo-spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-@media (prefers-reduced-motion: no-preference) {
-  a:nth-of-type(2) .logo {
-    animation: logo-spin infinite 20s linear;
-  }
-}
-
+/* (수정) card 스타일을 더 깔끔하게 */
 .card {
-  padding: 2em;
+  padding: 1.5em;
+  margin-bottom: 1.5rem;
+  background-color: #ffffff;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  border: 1px solid #e0e0e0;
 }
 
-.read-the-docs {
-  color: #888;
+/* (추가) 폼 그룹핑 스타일 */
+.form-group {
+  margin-bottom: 1rem;
+}
+.form-group label {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 0.25rem;
+}
+.form-group input {
+  width: 95%; /* 폼 너비 조정 */
+  max-width: 400px;
+}
+
+/* (추가) 버튼 스타일 오버라이드 */
+button[type="submit"] {
+  background-color: #646cff;
+  color: white;
+}
+button[type="submit"]:hover {
+  background-color: #535bf2;
+}
+
+/* (추가) HomePage의 여행 목록 스타일 */
+.trip-list {
+  list-style: none;
+  padding: 0;
+}
+.trip-list li {
+  display: flex; /* Flexbox로 정렬 */
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.8rem 0;
+  border-bottom: 1px solid #eee;
+}
+.trip-list li:last-child {
+  border-bottom: none;
+}
+.trip-list .trip-info {
+  flex-grow: 1; /* 이름/날짜가 공간을 차지 */
+}
+.trip-list .trip-info a {
+  font-weight: 600;
+  font-size: 1.1em;
+  text-decoration: none;
+}
+.trip-list .trip-info p {
+  font-size: 0.9em;
+  color: #666;
+  margin: 0;
+}
+.trip-list .trip-actions button {
+  margin-left: 0.5rem;
+  padding: 0.3em 0.8em;
+  font-size: 0.9em;
+}
+
+/* (추가) TripDetailPage의 D&D 아이템 스타일 */
+.dnd-item {
+  border-bottom: 1px solid #eee;
+  padding: 10px;
+  margin-bottom: 5px;
+  background-color: #fafafa;
+  border-radius: 6px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+}
+.dnd-item p {
+  font-size: 0.9em;
+  margin: 2px 0 0 0;
+  color: #555;
+}
+.dnd-item-actions {
+  margin-top: 5px;
+}
+.dnd-item-actions button {
+  background: none;
+  border: none;
+  padding: 0 5px 0 0;
+  cursor: pointer;
+  font-size: 0.9em;
+}
+.dnd-item-actions .memo-edit-btn {
+  color: #007bff;
+}
+.dnd-item-actions .delete-btn {
+  color: #dc3545;
+  font-size: 1.2em;
+  line-height: 1;
+}
+
+/* (추가) TripDetailPage의 지도/일정 레이아웃 */
+.detail-layout {
+  display: flex;
+  flex-wrap: wrap; /* 화면이 작으면 줄바꿈 */
+  gap: 20px;
+  margin-top: 20px;
+}
+.itinerary-column {
+  flex: 2; /* 40% -> flex 2 */
+  min-width: 300px;
+}
+.map-column {
+  flex: 3; /* 60% -> flex 3 */
+  min-width: 400px;
 }
