@@ -196,3 +196,212 @@ def read_my_trips(
     """
     # current_user.trips는 models.py의 "relationship" 덕분에 사용 가능합니다.
     return current_user.trips
+
+# --- 특정 여행의 상세 정보 (세부 일정 포함) ---
+@app.get("/api/trips/{trip_id}", response_model=schemas.Trip)
+def read_trip_details(
+    trip_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    """
+    특정 여행(Trip)의 상세 정보와 모든 세부 일정(items)을 조회합니다.
+    """
+    db_trip = db.query(models.Trip).filter(
+        models.Trip.id == trip_id,
+        models.Trip.owner_id == current_user.id # (보안) 본인 여행만 조회
+    ).first()
+    
+    if db_trip is None:
+        raise HTTPException(status_code=404, detail="여행을 찾을 수 없습니다.")
+        
+    return db_trip
+
+# --- 여행(Trip) 수정 ---
+@app.put("/api/trips/{trip_id}", response_model=schemas.Trip)
+def update_trip(
+    trip_id: int,
+    trip_update: schemas.TripUpdate, # 방금 만든 스키마 사용
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    """
+    특정 여행(Trip)의 정보를 (제목, 날짜) 수정합니다.
+    """
+    db_trip = db.query(models.Trip).filter(
+        models.Trip.id == trip_id,
+        models.Trip.owner_id == current_user.id # 본인 여행만 수정 가능
+    ).first()
+    
+    if db_trip is None:
+        raise HTTPException(status_code=404, detail="여행을 찾을 수 없습니다.")
+
+    # Pydantic 모델에서 받은 데이터를 딕셔너리로 변환
+    # exclude_unset=True는 사용자가 값을 보낸 필드만 업데이트하기 위함
+    update_data = trip_update.model_dump(exclude_unset=True)
+    
+    for key, value in update_data.items():
+        setattr(db_trip, key, value) # db_trip.title = "새 제목" 과 동일
+        
+    db.commit()
+    db.refresh(db_trip)
+    return db_trip
+
+@app.delete("/api/trips/{trip_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_trip(
+    trip_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    """
+    특정 여행(Trip)을 삭제합니다.
+    (models.py의 cascade 설정으로 인해 관련 items도 자동 삭제됩니다.)
+    """
+    db_trip = db.query(models.Trip).filter(
+        models.Trip.id == trip_id,
+        models.Trip.owner_id == current_user.id # 본인 여행만 삭제 가능
+    ).first()
+    
+    if db_trip is None:
+        raise HTTPException(status_code=404, detail="여행을 찾을 수 없습니다.")
+        
+    db.delete(db_trip)
+    db.commit()
+    return # 204 No Content는 응답 본문이 없어야 합니다.
+
+# === ItineraryItem API 엔드포인트 ===
+
+@app.post("/api/trips/{trip_id}/items", response_model=schemas.ItineraryItem, status_code=status.HTTP_201_CREATED)
+def create_itinerary_item_for_trip(
+    trip_id: int,
+    item: schemas.ItineraryItemCreate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    """
+    특정 여행(Trip)에 새로운 세부 일정(ItineraryItem)을 추가합니다.
+    """
+    # 1. 이 여행이 현재 로그인한 사용자의 소유인지 확인
+    db_trip = db.query(models.Trip).filter(
+        models.Trip.id == trip_id,
+        models.Trip.owner_id == current_user.id
+    ).first()
+    
+    if db_trip is None:
+        raise HTTPException(status_code=404, detail="여행을 찾을 수 없습니다.")
+    
+    # 2. 세부 일정(Item) 객체 생성 및 DB에 추가
+    db_item = models.ItineraryItem(**item.model_dump(), trip_id=trip_id)
+    db.add(db_item)
+    db.commit()
+    db.refresh(db_item)
+    return db_item
+
+# --- 세부 일정(Item) 수정 ---
+@app.put("/api/items/{item_id}", response_model=schemas.ItineraryItem)
+def update_itinerary_item(
+    item_id: int,
+    item_update: schemas.ItineraryItemUpdate, # 방금 만든 스키마 사용
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    """
+    특정 세부 일정(ItineraryItem)을 (메모, 날짜, 순서) 수정합니다.
+    """
+    db_item = db.query(models.ItineraryItem).filter(
+        models.ItineraryItem.id == item_id
+    ).first()
+
+    if db_item is None:
+        raise HTTPException(status_code=404, detail="일정을 찾을 수 없습니다.")
+
+    # (보안) 이 아이템이 속한 여행이 현재 사용자 소유인지 확인
+    if db_item.trip.owner_id != current_user.id:
+        raise HTTPException(status_code=403, detail="수정 권한이 없습니다.")
+
+    # Pydantic 모델에서 받은 데이터를 딕셔너리로 변환 (보낸 필드만)
+    update_data = item_update.model_dump(exclude_unset=True)
+    
+    for key, value in update_data.items():
+        setattr(db_item, key, value)
+        
+    db.commit()
+    db.refresh(db_item)
+    return db_item
+
+# --- 세부 일정(Item) 삭제 ---
+@app.delete("/api/items/{item_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_itinerary_item(
+    item_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    """
+    특정 세부 일정(ItineraryItem)을 삭제합니다.
+    """
+    # 1. 삭제할 아이템을 찾습니다.
+    db_item = db.query(models.ItineraryItem).filter(
+        models.ItineraryItem.id == item_id
+    ).first()
+
+    if db_item is None:
+        raise HTTPException(status_code=404, detail="일정을 찾을 수 없습니다.")
+
+    # 2. (보안) 그 아이템이 속한 여행(Trip)이 현재 로그인한 사용자의 소유인지 확인
+    # db_item.trip 관계(relationship)를 통해 소유자(owner)에 접근합니다.
+    if db_item.trip.owner_id != current_user.id:
+        raise HTTPException(status_code=403, detail="삭제 권한이 없습니다.")
+        
+    # 3. 아이템 삭제
+    db.delete(db_item)
+    db.commit()
+    return # 204 No Content
+
+# --- 세부 일정(Item) 순서 일괄 업데이트 ---
+@app.post("/api/items/reorder", response_model=List[schemas.ItineraryItem])
+def reorder_itinerary_items(
+    updates: List[schemas.ItemOrderUpdate], # 방금 만든 스키마의 '리스트'를 받음
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    """
+    세부 일정(ItineraryItem)의 순서(order_sequence)를 일괄 업데이트합니다.
+    """
+    # (매우 중요)
+    # 이 로직은 간단한 구현이며,
+    # 실제 프로덕션에서는 더 효율적인 bulk update 쿼리를 사용해야 합니다.
+    
+    updated_items = []
+    
+    # 1. DB에서 업데이트할 ID 목록을 먼저 조회합니다.
+    item_ids = [update.id for update in updates]
+    db_items = db.query(models.ItineraryItem).filter(
+        models.ItineraryItem.id.in_(item_ids)
+    ).all()
+    
+    # { id: db_item } 형태의 딕셔너리로 변환 (빠른 조회를 위해)
+    item_map = {item.id: item for item in db_items}
+    
+    if len(db_items) != len(updates):
+        raise HTTPException(status_code=404, detail="일부 일정을 찾을 수 없습니다.")
+
+    # 2. 각 아이템의 소유권 검사 및 순서 업데이트
+    for update in updates:
+        db_item = item_map.get(update.id)
+        
+        # (보안) 이 아이템이 속한 여행이 현재 사용자 소유인지 확인
+        if db_item.trip.owner_id != current_user.id:
+            raise HTTPException(status_code=403, detail=f"일정(ID: {db_item.id}) 수정 권한이 없습니다.")
+            
+        # 순서 업데이트
+        db_item.order_sequence = update.order_sequence
+        updated_items.append(db_item)
+        
+    # 3. DB에 일괄 커밋
+    db.commit()
+    
+    # (선택) refresh가 필요하면 루프를 다시 돌아야 함
+    # for item in updated_items:
+    #     db.refresh(item)
+        
+    return updated_items
