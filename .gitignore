@@ -3,6 +3,7 @@
 __pycache__/
 .pyc
 *.py[cod]
+backend/.env
 
 # Node (Frontend)
 /frontend/node_modules/
