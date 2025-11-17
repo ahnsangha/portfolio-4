@@ -221,7 +221,7 @@ def read_trip_details(
 @app.put("/api/trips/{trip_id}", response_model=schemas.Trip)
 def update_trip(
     trip_id: int,
-    trip_update: schemas.TripUpdate, # 방금 만든 스키마 사용
+    trip_update: schemas.TripUpdate, 
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
@@ -230,18 +230,28 @@ def update_trip(
     """
     db_trip = db.query(models.Trip).filter(
         models.Trip.id == trip_id,
-        models.Trip.owner_id == current_user.id # 본인 여행만 수정 가능
+        models.Trip.owner_id == current_user.id 
     ).first()
     
     if db_trip is None:
         raise HTTPException(status_code=404, detail="여행을 찾을 수 없습니다.")
 
     # Pydantic 모델에서 받은 데이터를 딕셔너리로 변환
-    # exclude_unset=True는 사용자가 값을 보낸 필드만 업데이트하기 위함
     update_data = trip_update.model_dump(exclude_unset=True)
     
+    # (추가) DB 업데이트 전 미리 적용해보고 날짜 유효성 검사
+    # 주의: 실제 커밋 전에 메모리 상에서만 체크
+    temp_start = update_data.get("start_date", db_trip.start_date)
+    temp_end = update_data.get("end_date", db_trip.end_date)
+
+    if temp_start and temp_end and temp_end < temp_start:
+        raise HTTPException(
+            status_code=400, 
+            detail="여행 종료일은 시작일보다 빠를 수 없습니다."
+        )
+
     for key, value in update_data.items():
-        setattr(db_trip, key, value) # db_trip.title = "새 제목" 과 동일
+        setattr(db_trip, key, value) 
         
     db.commit()
     db.refresh(db_trip)

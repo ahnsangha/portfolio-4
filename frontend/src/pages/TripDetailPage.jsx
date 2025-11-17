@@ -1,23 +1,37 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react'
-import { useParams, Link, useNavigate } from 'react-router-dom'
+import { useParams, Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext' 
 import '../App.css'
 import { GoogleMap, useJsApiLoader, Marker, Autocomplete, Polyline } from '@react-google-maps/api';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import Modal from 'react-modal'; 
 
-// --- (1) 컴포넌트 바깥에는 '고정된 값'만 둡니다 ---
 const mapContainerStyle = { width: '100%', height: '400px' };
 const defaultCenter = { lat: 37.5665, lng: 126.9780 };
 const libraries = ['places'];
-
-// (중요) 여기에 있던 polylineOptions는 삭제하고 컴포넌트 안으로 이동했습니다.
 
 export default function TripDetailPage() {
   // 1. 전역 상태 및 훅
   const { token, api, logout, isLoading: isAuthLoading } = useAuth();
   const navigate = useNavigate(); 
-  const { tripId } = useParams() 
+  const { tripId } = useParams()
+  
+  // (2) URL 파라미터 훅 사용
+  const [searchParams, setSearchParams] = useSearchParams();
+  
+  // (3) URL에서 'day' 값을 읽어옴 (없으면 기본값 1)
+  // useState 대신 이 변수를 '상태'처럼 사용합니다.
+  const selectedDay = parseInt(searchParams.get('day')) || 1;
+
+  // (4) 날짜 변경 헬퍼 함수
+  const setSelectedDay = (day) => {
+    // 기존 파라미터 유지하면서 day만 업데이트 (replace: true로 뒤로가기 기록 오염 방지)
+    setSearchParams(prev => {
+      const newParams = new URLSearchParams(prev);
+      newParams.set('day', String(day));
+      return newParams;
+    }, { replace: true });
+  };
   
   // 2. 이 페이지의 로컬 상태
   const [trip, setTrip] = useState(null)
@@ -25,12 +39,23 @@ export default function TripDetailPage() {
   const [error, setError] = useState('')
   const [mapCenter, setMapCenter] = useState(defaultCenter); 
   const [autocomplete, setAutocomplete] = useState(null); 
-  const [searchDay, setSearchDay] = useState(1); 
+  
+  // (UX 개선) 일정 추가 폼의 'Day' 입력칸도 현재 선택된 날짜로 초기화
+  const [searchDay, setSearchDay] = useState(selectedDay); 
+
+  // (useEffect를 사용하여 탭 변경 시 입력칸 Day도 따라가도록 동기화 - 선택 사항)
+  useEffect(() => {
+    setSearchDay(selectedDay);
+  }, [selectedDay]);
+
   const [searchMemo, setSearchMemo] = useState("");
-  const [selectedDay, setSelectedDay] = useState(1);
+  
+  // [삭제됨] 기존 useState로 관리하던 selectedDay는 삭제합니다.
+  // const [selectedDay, setSelectedDay] = useState(1);
+
   const [itemsForSelectedDay, setItemsForSelectedDay] = useState([]);
   const [selectedPlace, setSelectedPlace] = useState(null); 
-  const autocompleteInputRef = useRef(null); 
+  const autocompleteInputRef = useRef(null);
 
   // 3. '일정' 수정 모달 상태
   const [isMemoModalOpen, setIsMemoModalOpen] = useState(false);
@@ -88,8 +113,17 @@ export default function TripDetailPage() {
   
   // 7. API 호출 함수: fetchTripDetails
   const fetchTripDetails = () => {
+    // 토큰이 없으면 요청하지 않음 (방어 코드)
+    if (!token) return;
+
     setLoading(true);
-    api.get(`/api/trips/${tripId}`)
+
+    // (수정) 헤더 설정이 늦어질 수 있으므로, 여기서 직접 토큰을 담아서 보냅니다.
+    api.get(`/api/trips/${tripId}`, {
+      headers: {
+        Authorization: `Bearer ${token}` 
+      }
+    })
       .then(response => {
         setTrip(response.data)
         setLoading(false)
@@ -106,6 +140,7 @@ export default function TripDetailPage() {
         setError('여행 정보를 불러오지 못했습니다.')
         setLoading(false)
         if (err.response && err.response.status === 401) {
+          // 토큰이 만료되었거나 잘못된 경우에만 로그아웃
           logout();
           navigate('/'); 
         }
